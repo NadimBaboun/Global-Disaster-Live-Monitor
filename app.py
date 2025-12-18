@@ -127,12 +127,6 @@ def rss_to_df(xml_text: str) -> pd.DataFrame:
             elif kind == "date":
                 row[col] = _parse_rfc822(_find_text(it, path, default))
 
-        # attrs (value/unit)
-        row["severity_value"] = pd.to_numeric(_find_attr(it, "gdacs:severity", "value", None), errors="coerce")
-        row["severity_unit"] = _find_attr(it, "gdacs:severity", "unit", "")
-        row["population_value"] = pd.to_numeric(_find_attr(it, "gdacs:population", "value", None), errors="coerce")
-        row["population_unit"] = _find_attr(it, "gdacs:population", "unit", "")
-
         rows.append(row)
 
     df = pd.DataFrame(rows)
@@ -373,3 +367,4 @@ with st.expander("Debug: show raw feed preview (first 400 chars)"):
         st.code(fetch_gdacs_rss_xml()[:400])
     except Exception as e:
         st.error(str(e))
+

@@ -287,9 +287,17 @@ fig, ax = plt.subplots(figsize=(5, 5))
 ax.pie(type_counts.values, labels=type_counts.index.astype(str), autopct="%1.1f%%", startangle=90)
 st.pyplot(fig)
 
+# ---------- UPDATED: "Top countries" with a slider to control how many to show ----------
 st.subheader("Top countries (by alert count)")
-top_countries = filtered["country"].value_counts().head(10)
+
+country_counts = filtered["country"].value_counts()
+
+max_n = max(1, min(60, len(country_counts)))  # cap to keep it readable
+top_n = st.slider("How many countries to show", 5, max_n if max_n >= 5 else 5, min(10, max_n))
+
+top_countries = country_counts.head(top_n)
 st.bar_chart(top_countries)
+# -----------------------------------------------------------------------------------
 
 st.subheader("Map (highest alert score)")
 map_df = (
@@ -320,5 +328,4 @@ with st.expander("Debug: show raw feed preview (first 400 chars)"):
     try:
         st.code(fetch_gdacs_rss_xml()[:400])
     except Exception as e:
-
         st.error(str(e))

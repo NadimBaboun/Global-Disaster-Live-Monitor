@@ -257,6 +257,7 @@ with col2:
     st.line_chart(daily_avg_score)
 
 col3, col4 = st.columns(2)
+
 with col3:
     st.subheader("Cumulative alerts (selected range)")
     st.line_chart(cumulative_alerts)
@@ -264,12 +265,7 @@ with col3:
 with col4:
     st.subheader("Alert level distribution")
     level_counts = filtered["alert_level"].value_counts()
-
-    fig, ax = plt.subplots(figsize=(5, 4))
-    ax.bar(level_counts.index.astype(str), level_counts.values)
-    ax.set_ylabel("Alerts")
-    ax.set_xticklabels(level_counts.index.astype(str), rotation=30, ha="right")
-    st.pyplot(fig)
+    st.bar_chart(level_counts)
 
 st.subheader("Event type proportions")
 type_counts = filtered["event_type"].value_counts()
@@ -342,3 +338,4 @@ with st.expander("Debug: show raw feed preview (first 400 chars)"):
         st.code(fetch_gdacs_rss_xml()[:400])
     except Exception as e:
         st.error(str(e))
+

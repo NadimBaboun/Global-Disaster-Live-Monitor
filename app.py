@@ -287,9 +287,30 @@ fig, ax = plt.subplots(figsize=(5, 5))
 ax.pie(type_counts.values, labels=type_counts.index.astype(str), autopct="%1.1f%%", startangle=90)
 st.pyplot(fig)
 
+# ---------- UPDATED: Top countries chart with horizontal scrolling ----------
 st.subheader("Top countries (by alert count)")
-top_countries = filtered["country"].value_counts().head(10)
-st.bar_chart(top_countries)
+
+country_counts = filtered["country"].value_counts()
+
+# If you selected countries, show counts for those (sorted by count).
+# If you selected none, fall back to showing the overall top 10.
+if selected_countries:
+    selected_country_counts = country_counts.reindex(selected_countries).dropna().sort_values(ascending=False)
+else:
+    selected_country_counts = country_counts.head(10)
+
+if selected_country_counts.empty:
+    st.info("No country counts available for current filters.")
+else:
+    n = len(selected_country_counts)
+    fig_width = max(8, n * 0.6)  # wider figure => page can scroll horizontally
+
+    fig, ax = plt.subplots(figsize=(fig_width, 4))
+    ax.bar(selected_country_counts.index.astype(str), selected_country_counts.values)
+    ax.set_ylabel("Alerts")
+    ax.set_xticklabels(selected_country_counts.index.astype(str), rotation=45, ha="right")
+    st.pyplot(fig, use_container_width=False)
+# -----------------------------------------------------------------------
 
 st.subheader("Map (highest alert score)")
 map_df = (

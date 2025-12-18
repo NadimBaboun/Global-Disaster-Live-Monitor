@@ -258,7 +258,7 @@ with col2:
 
 col3, col4 = st.columns(2)
 with col3:
-    st.subheader("Cumulative alerts (selected range)")
+    st.subheader("Cumulative alerts")
     st.line_chart(cumulative_alerts)
 
 with col4:
@@ -341,6 +341,7 @@ with st.expander("Debug: show raw feed preview (first 400 chars)"):
         st.code(fetch_gdacs_rss_xml()[:400])
     except Exception as e:
         st.error(str(e))
+
 
 
 

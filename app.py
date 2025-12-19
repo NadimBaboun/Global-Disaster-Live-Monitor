@@ -9,6 +9,38 @@ import streamlit as st
 
 st.set_page_config(page_title="Global Disaster Monitor (GDACS)", page_icon="🌐", layout="wide")
 
+# ---- Force a light/white theme via CSS (works regardless of Streamlit theme settings) ----
+st.markdown(
+    """
+    <style>
+      /* Main page + app background */
+      .stApp { background: #ffffff !important; color: #111827 !important; }
+      [data-testid="stAppViewContainer"] { background: #ffffff !important; }
+      [data-testid="stHeader"] { background: rgba(255,255,255,0) !important; }
+
+      /* Sidebar background */
+      [data-testid="stSidebar"] { background: #ffffff !important; }
+      [data-testid="stSidebar"] * { color: #111827 !important; }
+
+      /* Make common text look good on white */
+      h1, h2, h3, h4, h5, h6, p, span, label, div { color: #111827 !important; }
+
+      /* Charts: ensure Streamlit chart containers don't look dark */
+      [data-testid="stVegaLiteChart"] { background: #ffffff !important; }
+      [data-testid="stPlotlyChart"] { background: #ffffff !important; }
+      [data-testid="stArrowVegaLiteChart"] { background: #ffffff !important; }
+
+      /* Dataframes/tables */
+      .stDataFrame, [data-testid="stDataFrame"] { background: #ffffff !important; }
+
+      /* Optional: lighten select boxes */
+      [data-baseweb="select"] > div { background: #ffffff !important; }
+      [data-baseweb="input"] > div { background: #ffffff !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 GDACS_RSS_URL = "https://www.gdacs.org/xml/rss.xml"
 CACHE_FILE = "GDACS_cache.csv"
 
@@ -272,14 +304,10 @@ st.subheader("Top countries (by alert count)")
 country_counts = filtered["country"].value_counts().sort_values(ascending=False)
 st.bar_chart(country_counts, height=500)
 
-# ---------- Newly added charts go HERE (under Top countries, before Map) ----------
-st.divider()
-st.header("Additional insights")
-
 # Row 1: Pie (event types) + Histogram (alert scores)
-cA, cB = st.columns(2)
+col5, col6 = st.columns(2)
 
-with cA:
+with col5:
     st.subheader("Event type distribution (pie)")
     event_counts = filtered["event_type"].value_counts().sort_values(ascending=False)
 
@@ -294,7 +322,7 @@ with cA:
     ax.axis("equal")
     show_fig(fig)
 
-with cB:
+with col6:
     st.subheader("Alert score distribution (histogram)")
     scores = pd.to_numeric(filtered["alert_score"], errors="coerce").dropna()
 
@@ -305,10 +333,9 @@ with cB:
     ax.set_ylabel("Frequency")
     show_fig(fig)
 
-# Row 2: Boxplot (score by event type) + Stacked bar (levels by type)
-cC, cD = st.columns(2)
+col7, col8 = st.columns(2)
 
-with cC:
+with col7:
     st.subheader("Alert score by event type (boxplot)")
     box_df = filtered[["event_type", "alert_score"]].copy()
     box_df["alert_score"] = pd.to_numeric(box_df["alert_score"], errors="coerce")
@@ -333,7 +360,7 @@ with cC:
     else:
         st.info("Not enough numeric alert_score values to draw the boxplot.")
 
-with cD:
+with col8:
     st.subheader("Alert levels by event type (stacked bar)")
     stacked = (
         filtered.groupby(["event_type", "alert_level"])
@@ -355,9 +382,9 @@ with cD:
         st.info("No data available for stacked bar chart.")
 
 # Row 3: Trend by type + Rolling average
-cE, cF = st.columns(2)
+col9, col10 = st.columns(2)
 
-with cE:
+with col9:
     st.subheader("Alerts over time by event type (trend)")
     pivot = (
         filtered.groupby(["date_utc", "event_type"])
@@ -378,7 +405,7 @@ with cE:
     else:
         st.info("Not enough data to plot event-type trends over time.")
 
-with cF:
+with col10:
     st.subheader("Daily alerts (7-day rolling average)")
     rolling = daily_count.rolling(7).mean()
 
@@ -401,3 +428,4 @@ map_df = (
     .head(max_points)
 )
 st.map(map_df[["latitude", "longitude"]])
+

@@ -131,7 +131,7 @@ def load_data_with_cache():
         df.to_csv(CACHE_FILE, index=False, encoding="utf-8")
         return df, None
 
-    except Exception as e:
+    except Exception:
         if os.path.exists(CACHE_FILE):
             cached = pd.read_csv(CACHE_FILE, encoding="utf-8")
 
@@ -151,6 +151,10 @@ def load_data_with_cache():
             return cached, "Error: GDACS fetch failed — using cached file."
 
         return pd.DataFrame(), "Error: GDACS fetch failed and no cache found."
+
+
+def show_fig(fig):
+    st.pyplot(fig, clear_figure=True)
 
 
 # ---------- UI ----------
@@ -222,8 +226,6 @@ cumulative_alerts = daily_count.cumsum()
 
 # Daily Summary
 st.sidebar.subheader("Daily summary")
-
-# Toggle: default is last 10 days
 show_all_days = st.sidebar.checkbox("Show all days", value=True)
 
 summary_tbl = pd.DataFrame(
@@ -237,7 +239,6 @@ summary_tbl = pd.DataFrame(
 if not show_all_days:
     summary_tbl = summary_tbl.tail(10)
 
-# Make row numbering start at 1 instead of 0
 summary_tbl.index = range(1, len(summary_tbl) + 1)
 
 st.sidebar.dataframe(
@@ -246,7 +247,7 @@ st.sidebar.dataframe(
     height=387,
 )
 
-# Main charts
+# ---------- Main charts (Streamlit built-ins where possible) ----------
 col1, col2 = st.columns(2)
 with col1:
     st.subheader("Daily alert count")
@@ -263,21 +264,11 @@ with col3:
 
 with col4:
     st.subheader("Alert level distribution")
-    level_counts = (
-    filtered["alert_level"]
-    .value_counts()
-    .sort_values(ascending=False)
-    )
-    st.bar_chart(level_counts, height= 369)
+    level_counts = filtered["alert_level"].value_counts().sort_values(ascending=False)
+    st.bar_chart(level_counts, height=369)
 
 st.subheader("Top countries (by alert count)")
-
-country_counts = (
-    filtered["country"]
-    .value_counts()
-    .sort_values(ascending=False)
-)
-
+country_counts = filtered["country"].value_counts().sort_values(ascending=False)
 st.bar_chart(country_counts, height=500)
 
 st.subheader("Map (highest alert score)")
@@ -288,6 +279,140 @@ map_df = (
 )
 st.map(map_df[["latitude", "longitude"]])
 
+# ---------- Additional plots (Matplotlib) ----------
+st.divider()
+st.header("Additional insights")
+
+# Row 1: Pie (event types) + Histogram (alert scores)
+cA, cB = st.columns(2)
+
+with cA:
+    st.subheader("Event type distribution (pie)")
+    event_counts = filtered["event_type"].value_counts().sort_values(ascending=False)
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.pie(
+        event_counts.values,
+        labels=event_counts.index,
+        autopct="%1.1f%%",
+        startangle=90,
+    )
+    ax.set_title("Event type distribution")
+    ax.axis("equal")
+    show_fig(fig)
+
+with cB:
+    st.subheader("Alert score distribution (histogram)")
+    scores = pd.to_numeric(filtered["alert_score"], errors="coerce").dropna()
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.hist(scores, bins=20)
+    ax.set_title("Distribution of alert scores")
+    ax.set_xlabel("Alert score")
+    ax.set_ylabel("Frequency")
+    show_fig(fig)
+
+# Row 2: Boxplot (score by event type) + Stacked bar (levels by type)
+cC, cD = st.columns(2)
+
+with cC:
+    st.subheader("Alert score by event type (boxplot)")
+    box_df = filtered[["event_type", "alert_score"]].copy()
+    box_df["alert_score"] = pd.to_numeric(box_df["alert_score"], errors="coerce")
+    box_df = box_df.dropna(subset=["event_type", "alert_score"])
+
+    if not box_df.empty:
+        order = (
+            box_df.groupby("event_type")["alert_score"]
+            .median()
+            .sort_values(ascending=False)
+            .index.tolist()
+        )
+        data = [box_df.loc[box_df["event_type"] == t, "alert_score"].values for t in order]
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.boxplot(data, labels=order, showfliers=False)
+        ax.set_title("Alert score by event type")
+        ax.set_xlabel("Event type")
+        ax.set_ylabel("Alert score")
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+        show_fig(fig)
+    else:
+        st.info("Not enough numeric alert_score values to draw the boxplot.")
+
+with cD:
+    st.subheader("Alert levels by event type (stacked bar)")
+    stacked = (
+        filtered.groupby(["event_type", "alert_level"])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    if not stacked.empty:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        stacked.plot(kind="bar", stacked=True, ax=ax)
+        ax.set_title("Alert levels by event type")
+        ax.set_xlabel("Event type")
+        ax.set_ylabel("Count")
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+        ax.legend(title="Alert level", bbox_to_anchor=(1.02, 1), loc="upper left")
+        plt.tight_layout()
+        show_fig(fig)
+    else:
+        st.info("No data available for stacked bar chart.")
+
+# Row 3: Trend by type + Rolling average
+cE, cF = st.columns(2)
+
+with cE:
+    st.subheader("Alerts over time by event type (trend)")
+    pivot = (
+        filtered.groupby(["date_utc", "event_type"])
+        .size()
+        .unstack(fill_value=0)
+    )
+    if not pivot.empty:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        pivot.plot(ax=ax)
+        ax.set_title("Alerts over time by event type")
+        ax.set_xlabel("Date (UTC)")
+        ax.set_ylabel("Alerts")
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+        ax.legend(title="Event type", bbox_to_anchor=(1.02, 1), loc="upper left")
+        plt.tight_layout()
+        show_fig(fig)
+    else:
+        st.info("Not enough data to plot event-type trends over time.")
+
+with cF:
+    st.subheader("Daily alerts (7-day rolling average)")
+    rolling = daily_count.rolling(7).mean()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(daily_count.index, daily_count.values, label="Daily", alpha=0.4)
+    ax.plot(rolling.index, rolling.values, label="7-day rolling avg")
+    ax.set_title("Daily alerts (smoothed)")
+    ax.set_xlabel("Date (UTC)")
+    ax.set_ylabel("Alerts")
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+    ax.legend()
+    plt.tight_layout()
+    show_fig(fig)
+
+# Row 4: Scatter population vs score
+st.subheader("Alert score vs population (scatter)")
+pop = pd.to_numeric(filtered["population_text"], errors="coerce")
+score = pd.to_numeric(filtered["alert_score"], errors="coerce")
+tmp = pd.DataFrame({"population": pop, "alert_score": score}).dropna()
+
+if not tmp.empty:
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.scatter(tmp["population"], tmp["alert_score"], alpha=0.5)
+    ax.set_title("Alert score vs affected population")
+    ax.set_xlabel("Population")
+    ax.set_ylabel("Alert score")
+    plt.tight_layout()
+    show_fig(fig)
+else:
+    st.info("Population/alert_score values are not numeric enough to plot the scatter.")
+
+# ---------- Table ----------
 st.subheader("Most recent alerts")
 show_cols = [
     "main_time",

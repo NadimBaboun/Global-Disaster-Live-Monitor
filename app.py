@@ -2,44 +2,13 @@ import os
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 
+import altair as alt
 import matplotlib.pyplot as plt
 import pandas as pd
 import requests
 import streamlit as st
 
 st.set_page_config(page_title="Global Disaster Monitor (GDACS)", page_icon="🌐", layout="wide")
-
-# ---- Force a light/white theme via CSS (works regardless of Streamlit theme settings) ----
-st.markdown(
-    """
-    <style>
-      /* Main page + app background */
-      .stApp { background: #ffffff !important; color: #111827 !important; }
-      [data-testid="stAppViewContainer"] { background: #ffffff !important; }
-      [data-testid="stHeader"] { background: rgba(255,255,255,0) !important; }
-
-      /* Sidebar background */
-      [data-testid="stSidebar"] { background: #ffffff !important; }
-      [data-testid="stSidebar"] * { color: #111827 !important; }
-
-      /* Make common text look good on white */
-      h1, h2, h3, h4, h5, h6, p, span, label, div { color: #111827 !important; }
-
-      /* Charts: ensure Streamlit chart containers don't look dark */
-      [data-testid="stVegaLiteChart"] { background: #ffffff !important; }
-      [data-testid="stPlotlyChart"] { background: #ffffff !important; }
-      [data-testid="stArrowVegaLiteChart"] { background: #ffffff !important; }
-
-      /* Dataframes/tables */
-      .stDataFrame, [data-testid="stDataFrame"] { background: #ffffff !important; }
-
-      /* Optional: lighten select boxes */
-      [data-baseweb="select"] > div { background: #ffffff !important; }
-      [data-baseweb="input"] > div { background: #ffffff !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 GDACS_RSS_URL = "https://www.gdacs.org/xml/rss.xml"
 CACHE_FILE = "GDACS_cache.csv"
@@ -189,6 +158,24 @@ def show_fig(fig):
     st.pyplot(fig, clear_figure=True)
 
 
+# ---------- Matplotlib dark theme helpers ----------
+DARK_BG = "#0f172a"
+DARK_FG = "#e5e7eb"
+DARK_GRID = "#334155"
+
+def darken_fig(fig, ax):
+    """Apply a consistent dark look to a matplotlib figure/axes."""
+    fig.patch.set_facecolor(DARK_BG)
+    ax.set_facecolor(DARK_BG)
+    ax.tick_params(colors=DARK_FG)
+    for spine in ax.spines.values():
+        spine.set_color(DARK_FG)
+    ax.xaxis.label.set_color(DARK_FG)
+    ax.yaxis.label.set_color(DARK_FG)
+    ax.title.set_color(DARK_FG)
+    ax.grid(True, color=DARK_GRID, alpha=0.35)
+
+
 # ---------- UI ----------
 st.title("Global Disaster Monitor — Live Alerts Dashboard")
 st.caption("Source: GDACS RSS feed (near real-time natural disaster alerts)")
@@ -271,7 +258,6 @@ summary_tbl = pd.DataFrame(
 if not show_all_days:
     summary_tbl = summary_tbl.tail(10)
 
-# Make row numbering start at 1 instead of 0
 summary_tbl.index = range(1, len(summary_tbl) + 1)
 
 st.sidebar.dataframe(
@@ -280,7 +266,7 @@ st.sidebar.dataframe(
     height=387,
 )
 
-# ---------- Main charts (Streamlit built-ins where possible) ----------
+# ---------- Main charts (Streamlit built-ins) ----------
 col1, col2 = st.columns(2)
 with col1:
     st.subheader("Daily alert count")
@@ -304,6 +290,7 @@ st.subheader("Top countries (by alert count)")
 country_counts = filtered["country"].value_counts().sort_values(ascending=False)
 st.bar_chart(country_counts, height=500)
 
+# ---------- Matplotlib charts (ALL dark themed) ----------
 # Row 1: Pie (event types) + Histogram (alert scores)
 col5, col6 = st.columns(2)
 
@@ -311,27 +298,35 @@ with col5:
     st.subheader("Event type distribution (pie)")
     event_counts = filtered["event_type"].value_counts().sort_values(ascending=False)
 
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.pie(
-        event_counts.values,
-        labels=event_counts.index,
-        autopct="%1.1f%%",
-        startangle=90,
-    )
-    ax.set_title("Event type distribution")
-    ax.axis("equal")
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(6, 6))
+        fig.patch.set_facecolor(DARK_BG)
+        ax.set_facecolor(DARK_BG)
+
+        ax.pie(
+            event_counts.values,
+            labels=event_counts.index,
+            autopct="%1.1f%%",
+            startangle=90,
+            textprops={"color": DARK_FG},
+        )
+        ax.set_title("Event type distribution", color=DARK_FG)
+        ax.axis("equal")
+
     show_fig(fig)
 
 with col6:
     st.subheader("Alert score distribution (histogram)")
     scores = pd.to_numeric(filtered["alert_score"], errors="coerce").dropna()
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.hist(scores, bins=20)
-    ax.set_title("Distribution of alert scores")
-    ax.set_xlabel("Alert score")
-    ax.set_ylabel("Frequency")
-    show_fig(fig)
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.hist(scores, bins=20)
+        ax.set_title("Distribution of alert scores")
+        ax.set_xlabel("Alert score")
+        ax.set_ylabel("Frequency")
+        darken_fig(fig, ax)
+        show_fig(fig)
 
 col7, col8 = st.columns(2)
 
@@ -350,13 +345,15 @@ with col7:
         )
         data = [box_df.loc[box_df["event_type"] == t, "alert_score"].values for t in order]
 
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.boxplot(data, labels=order, showfliers=False)
-        ax.set_title("Alert score by event type")
-        ax.set_xlabel("Event type")
-        ax.set_ylabel("Alert score")
-        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-        show_fig(fig)
+        with plt.style.context("dark_background"):
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.boxplot(data, labels=order, showfliers=False)
+            ax.set_title("Alert score by event type")
+            ax.set_xlabel("Event type")
+            ax.set_ylabel("Alert score")
+            plt.setp(ax.get_xticklabels(), rotation=45, ha="right", color=DARK_FG)
+            darken_fig(fig, ax)
+            show_fig(fig)
     else:
         st.info("Not enough numeric alert_score values to draw the boxplot.")
 
@@ -369,15 +366,22 @@ with col8:
     )
 
     if not stacked.empty:
-        fig, ax = plt.subplots(figsize=(10, 5))
-        stacked.plot(kind="bar", stacked=True, ax=ax)
-        ax.set_title("Alert levels by event type")
-        ax.set_xlabel("Event type")
-        ax.set_ylabel("Count")
-        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-        ax.legend(title="Alert level", bbox_to_anchor=(1.02, 1), loc="upper left")
-        plt.tight_layout()
-        show_fig(fig)
+        with plt.style.context("dark_background"):
+            fig, ax = plt.subplots(figsize=(10, 5))
+            stacked.plot(kind="bar", stacked=True, ax=ax)
+            ax.set_title("Alert levels by event type")
+            ax.set_xlabel("Event type")
+            ax.set_ylabel("Count")
+            plt.setp(ax.get_xticklabels(), rotation=45, ha="right", color=DARK_FG)
+
+            leg = ax.legend(title="Alert level", bbox_to_anchor=(1.02, 1), loc="upper left")
+            if leg is not None:
+                plt.setp(leg.get_texts(), color=DARK_FG)
+                plt.setp(leg.get_title(), color=DARK_FG)
+
+            darken_fig(fig, ax)
+            plt.tight_layout()
+            show_fig(fig)
     else:
         st.info("No data available for stacked bar chart.")
 
@@ -393,15 +397,22 @@ with col9:
     )
 
     if not pivot.empty:
-        fig, ax = plt.subplots(figsize=(10, 5))
-        pivot.plot(ax=ax)
-        ax.set_title("Alerts over time by event type")
-        ax.set_xlabel("Date (UTC)")
-        ax.set_ylabel("Alerts")
-        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-        ax.legend(title="Event type", bbox_to_anchor=(1.02, 1), loc="upper left")
-        plt.tight_layout()
-        show_fig(fig)
+        with plt.style.context("dark_background"):
+            fig, ax = plt.subplots(figsize=(10, 5))
+            pivot.plot(ax=ax)
+            ax.set_title("Alerts over time by event type")
+            ax.set_xlabel("Date (UTC)")
+            ax.set_ylabel("Alerts")
+            plt.setp(ax.get_xticklabels(), rotation=45, ha="right", color=DARK_FG)
+
+            leg = ax.legend(title="Event type", bbox_to_anchor=(1.02, 1), loc="upper left")
+            if leg is not None:
+                plt.setp(leg.get_texts(), color=DARK_FG)
+                plt.setp(leg.get_title(), color=DARK_FG)
+
+            darken_fig(fig, ax)
+            plt.tight_layout()
+            show_fig(fig)
     else:
         st.info("Not enough data to plot event-type trends over time.")
 
@@ -409,16 +420,22 @@ with col10:
     st.subheader("Daily alerts (7-day rolling average)")
     rolling = daily_count.rolling(7).mean()
 
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(daily_count.index, daily_count.values, label="Daily", alpha=0.4)
-    ax.plot(rolling.index, rolling.values, label="7-day rolling avg")
-    ax.set_title("Daily alerts (smoothed)")
-    ax.set_xlabel("Date (UTC)")
-    ax.set_ylabel("Alerts")
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-    ax.legend()
-    plt.tight_layout()
-    show_fig(fig)
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.plot(daily_count.index, daily_count.values, label="Daily", alpha=0.4)
+        ax.plot(rolling.index, rolling.values, label="7-day rolling avg")
+        ax.set_title("Daily alerts (smoothed)")
+        ax.set_xlabel("Date (UTC)")
+        ax.set_ylabel("Alerts")
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", color=DARK_FG)
+
+        leg = ax.legend()
+        if leg is not None:
+            plt.setp(leg.get_texts(), color=DARK_FG)
+
+        darken_fig(fig, ax)
+        plt.tight_layout()
+        show_fig(fig)
 
 # ---------- Map ----------
 st.subheader("Map (highest alert score)")
@@ -428,4 +445,3 @@ map_df = (
     .head(max_points)
 )
 st.map(map_df[["latitude", "longitude"]])
-
